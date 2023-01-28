@@ -1,0 +1,992 @@
+---
+title: Analysis of Users' Perception of Competing Video Gaming Consoles from Twitter
+  Data 
+    ![](Screenshot 2022-12-03 124600.jpg){width=1in, height=0.7in}
+author: "Group 5 - 10778940|10790672|10787306|10799756"
+output: beamer_presentation
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+keep_tex: false
+bibliography: Socialmediaref.bib
+fontsize: "8pt"
+header-includes:
+- \usepackage{booktabs}
+- \usepackage{longtable}
+- \usepackage{array}
+- \usepackage{multirow}
+- \usepackage{wrapfig}
+- \usepackage{float}
+- \usepackage{colortbl}
+- \usepackage{pdflscape}
+- \usepackage{threeparttable}
+- \usepackage{threeparttablex}
+- \usepackage[normalem]{ulem}
+- \usepackage{makecell}
+- \usepackage{helvet}
+- \renewcommand{\familydefault}{\sfdefault}
+- \usepackage{caption} 
+- \captionsetup[table]{skip=7pt}
+---
+
+```{r setup, include=FALSE}
+library(rtweet)
+library(stringr)
+library(ggplot2)
+options(dplyr.summarise.inform = FALSE)
+library(dplyr)
+library(ggthemes)
+library(readr)
+library(jsonlite)
+library(tidytext)
+library(wordcloud)
+library(wordcloud2)
+library(tidyr)
+library(maps)
+library(httpuv)
+library(lubridate)
+library(scales)
+library(data.table)
+library(formattable)
+library(kableExtra)
+#library(r2symbols)
+library(Hmisc)
+library(reactable)
+library(htmltools)
+library(knitr)
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+```{r include=FALSE}
+customGreen0 = "#DeF7E9"
+customGreen = "#71CA97"
+customBlue = "#55aaff"
+customBlue0 = "#add8e6"
+customRed = "#ff7f7f"
+customPurple = "#b19cd9"
+customPurple2 = "#801A86"
+customPink = "#fa86c4"
+ps5colour = "#003791"
+Xboxcolour = "#107C10"
+caption = "Source: Data collected from Twitter's REST API via rtweet"
+```
+
+## Introduction\newline
+
+##### *Why 'PlayStation 5' vs 'Xbox Series X'?*
+
+- Microsoft and SONY are two of the biggest players in the non hand-held console gaming market with their feature products ‘Xbox’ & ‘PlayStation’ being 2 of the most purchased gaming consoles globally in the last 2 decades.(@stat).
+- In November 2020, Microsoft released the “Xbox Series X”*(Xbox)* to rival SONY’s “Playstation 5”*(Ps5)* released in same month.(@econ).\newline
+
+
+```{r include=FALSE}
+Year<- as.factor(c(2020, 2021))
+Playstation_5<- c(4.39, 12.59)
+Xbox_Series_X<- c(3.03, 8.75)
+Worldwide_Sales<- data.frame(Year,Playstation_5,Xbox_Series_X)
+```
+
+```{r include=FALSE, eval = TRUE}
+Year<- as.factor(c(2020, 2021))
+Playstation_5<- c(4.39, 12.59)
+Xbox_Series_X<- c(3.03, 8.75)
+Worldwide_Sales<- data.frame(Year,Playstation_5,Xbox_Series_X)
+```
+
+```{r Worldwide_Sales, echo=FALSE, fig.height=4,dpi=72}
+viz_1<-Worldwide_Sales%>%gather(Product, Sales, 2:3)%>%arrange(desc(Year))%>%
+  ggplot(aes(x = Year, y=Sales, fill = Product)) +
+  geom_bar(stat="identity", position=position_dodge(),width =0.4,alpha =0.6)+
+  geom_text(aes(label = round(Sales,1), fontface ="bold", size = 10),
+                show.legend = F,
+            hjust = 0.5, vjust = 2.5,colour="white",
+            position = position_dodge2(width = 0.4, preserve = "single"))+
+  labs(x="Year",
+       y = "Sales",
+       title = "Current-gen video game console unit sales worldwide 2020-2021",
+       subtitle ="(sales in million units)",
+       caption = "Source: Statista 2022")+
+  scale_fill_manual(values = c("#003791", "#107C10"),labels=c('Playstation 5', 'Xbox Series X'))+scale_x_discrete(expand=c(0,0))+
+  theme(plot.title = element_text(size=13, face ="bold",hjust = 0.5),
+        plot.subtitle = element_text(size = 11,hjust = 0.5),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.text.y = element_blank(),
+        axis.text.x = element_text(size = 11),
+        axis.ticks.y = element_blank(),
+        axis.ticks.x = element_blank(),
+        legend.text = element_text(size = 10),
+        legend.position ="top",
+        legend.title = element_blank(),
+        legend.background = element_rect(fill = "#FAF9F6"),
+        panel.background = element_rect(fill = "#FAF9F6"),
+        plot.background = element_rect(fill = "#FAF9F6"),
+        aspect.ratio = 0.35,
+        plot.margin = unit(c(0.5,0.5,0.5,0.5),"cm"))
+viz_1
+```
+
+
+##### *Who needs to understand User Perception of these Products?*
+**International Retailers** (Amazon, Walmart etc.), **Video Game Developers** (Activision, Gameloft etc.), **Microsoft** and **SONY**.
+
+
+## Data Gathering
+
+- Data sourced using the ‘rtweet’ package in R. (@rtweet).
+- ***16470*** tweets downloaded for Xbox Series X
+- ***34567*** tweets downloaded for PlayStation 5
+- Data considered tweets within **6-9 days** leading up to **November 24th 2022**. (@rtweet).
+- English speaking markets were the focus of analysis
+
+- We did a Preliminary Study to understand how users mention these products in their tweets and used this to structure our keyword search which included multiple keywords.
+
+#### *Xbox Series X* search keywords:
+"xbox series x","xboxseriesx" or #xboxseriesx
+
+#### *Playstation 5* search keywords:
+"ps5", "playstation 5","playstation5", #playstation5 or #ps5
+
+## Data Cleaning and Transformation\newline
+
+- The Location related data was analysed to measure the extent of reliability.
+
+```{r include=FALSE}
+twt_xbox <- read_csv("twt_xbox_2.csv")
+twt_ps5<- read_csv("twt_ps5_2.csv")
+```
+
+```{r include=FALSE}
+twt_xbox_2 <- twt_xbox %>% mutate("subject" = "xbox")
+twt_ps5_2 <- twt_ps5 %>% mutate("subject" = "ps5")
+all_tweets <- rbind(twt_xbox_2,twt_ps5_2)
+```
+
+```{r include=FALSE}
+twt_xbox_2 <- twt_xbox %>% mutate("subject" = "xbox")
+twt_ps5_2 <- twt_ps5 %>% mutate("subject" = "ps5")
+all_tweets <- rbind(twt_xbox_2,twt_ps5_2)
+all_tweets <- lat_lng(all_tweets)
+```
+
+```{r echo=FALSE,warning=FALSE}
+viz_2<- all_tweets%>%select(country,country_code,lat,lng,location)%>%
+  summarise(
+  country = sum(!is.na(country)),
+  lat = sum(!is.na(lat)),
+  lng = sum(!is.na(lng)),
+  location = sum(!is.na(location))
+  )%>% rename("Tweets with 'country' data" = country,
+              "Tweets with 'latitude' data" = lat,
+              "Tweets with 'longitude' data"=lng,
+              "Tweets with 'location' data" = location)%>%
+  gather(key = "column", value = "Tweets", 1:4)%>%
+  mutate(percent_total = percent(signif(Tweets/nrow(all_tweets),2)))%>%
+  rename(" "=column,"Tweet Count" = Tweets,"% of Total Tweets"=percent_total)%>%
+  kbl(caption ="Analysis of location related variables in downloaded tweet data")%>%
+  kable_styling(latex_options = c("striped"), full_width = F, position = "center", font_size = 7)%>%
+  footnote(general = "This table considers a total of 51,037 tweets downloaded for both products in the analysis ")%>%
+  row_spec(0, background = customPurple2, color = "white")%>%
+  row_spec(4, background = "#ebe8fc", color = "black")
+  
+viz_2
+```
+
+
+```{r location data analysis, echo=FALSE, warning=FALSE}
+table_1<- all_tweets %>%
+  count(location, sort = TRUE) %>% # count the frequency for each location
+  mutate(location = reorder(location, n)) %>% # make sure that locations are ordered according to frequency
+  head(5)%>%rename("Location"=location,"Tweet Count"=n)%>%
+  kbl(booktabs = T,caption="Tweets by unique locations showing inconsistent formatting and strange location values")%>%
+  kable_styling(latex_options = c("striped"), full_width = F, position = "left",font_size = 7)
+# %>%
+#   footnote(general = "This table considers a total of 51,037 tweets downloaded for both products in the analysis ")
+
+table_1
+```
+
+```{r include=FALSE}
+all_tweets$location[all_tweets$location==""] <- NA
+all_tweets <- all_tweets %>% mutate(location = str_trim(location))
+all_tweets <- all_tweets %>% mutate(country_rec =
+                                       recode(location, "Pittsburgh, PA" = "USA", "United States" = "USA",
+                                                   "Canada" = "Canada",
+                                                    "London, England" = "United Kingdom",
+                                                    "California,USA" = "USA",
+                                                    "UK" = "United Kingdom",
+                                                    "Tottenham London" = "United Kingdom",
+                                                    "Tottenham, London" ="United Kingdom",
+                                                   "united state" = "USA",
+                                                   "Los Angeles, CA" = "USA",
+                                                   "Arkansas,. USA" = "USA",
+                                                   "Arkansas, USA" = "USA",
+                                                   "Chicago" = "USA",
+                                                   "Bracknell, Berkshire" = "United Kingdom",
+                                                   "Canada" = "Canada",
+                                                   "Fort Worth, Texas" = "USA",
+                                                   "New York, USA" = "USA",
+                                                   "Texas, USA" = "USA",
+                                                   "England, United Kingdom" = "USA",
+                                                   "France" = "France",
+                                                   "Florida, USA" = "USA",
+                                                   "Australia" = "Australia",
+                                                   "Ipswich, England" = "United Kingdom",
+                                                   "Chicago, IL" = "USA",
+                                                   "Russia" = "Russia",
+                                                   "Durham, England" = "United Kingdom",
+                                                   "Germany" = "Germany",
+                                                   "New York, NY" = "USA",
+                                                   "Ireland" = "Ireland",
+                                                   "Kaduna" = "Nigeria",
+                                                   "Glasgow, Scotland" = "United Kingdom",
+                                                   "Corona, CA" = "USA",
+                                                   "St Louis, MO" = "USA",
+                                                   "Bristol, England" = "United Kingdom",
+                                                   "Atlanta, GA" = "USA",
+                                                   "India" = "India",
+                                                   "Portugal" = "Portugal",
+                                                   "London" = "London",
+                                                   "India" = "India",
+                                                   "Seattle, WA" = "USA",
+                                                   "England" = "United Kingdom",
+                                                   "Arizona, USA" = "USA",
+                                                   "Jesenice, Slovenija" = "Slovenia",
+                                                   "California" = "USA",
+                                                   "San Diego, CA" = "USA",
+                                                   "Melbourne, Victoria" = "Australia",
+                                                   "Brasil" = "Brazil",
+                                                   "Tisdale, Saskatchewan, Canada" = "Canada",
+                                                   "Texas" = "USA",
+                                                   "Scotland, United Kingdom" = "United Kingdom",
+                                                   "Pennsylvania, USA" = "USA",
+                                                   "Montclair, NJ" = "USA",
+                                                   "Jersey, C.I." = "USA",
+                                                   "North West, England" = "United Kingdom",
+                                                   "Miami, FL" = "USA",
+                                                   "Kentucky, USA" = "USA",
+                                                   "Houston, TX" = "USA",
+                                                   "Bay Area, California" = "USA",
+                                                   "Memphis, TN" = "USA",
+                                                   "Scotland, Glasgow" = "USA",
+                                                   "North Carolina, USA" = "USA",
+                                                   "Orlando, Florida" = "USA",
+                                                   "New Jersey, USA" = "USA",
+                                                   "Los Angeles" = "USA",
+                                                   "Georgia, USA" = "USA",
+                                                   "East Peoria, IL" = "USA",
+                                                   "Boston, MA" = "USA",
+                                                   "Austin, TX" = "USA",
+                                                   "Wisconsin, USA" = "USA",
+                                                   "Wichita, KS" = "USA",
+                                                   "Warsaw, Poland" = "USA",
+                                                   "San Antonio, TX" = "USA",
+                                                   "Puglia, Italia" = "Italy",
+                                                   "Michigann, USA" = "USA",
+                                                   "Brisbane, Australia" = "USA",
+                                                   "Leeds, England" = "United Kingdom",
+                                                   "Las Vegas, NV" = "USA",
+                                                   "Connecticut, USA" = "USA",
+                                                   "Calgary, Alberta" = "Canada",
+                                                   "Banstead, South East" = "United Kingdom",
+                                                   "Australia" = "Australia",
+                                                   "UK" = "United Kingdom",
+                                                   "Los Angeles, CA" = "USA",
+                                                   "England, United Kingdom" = "United Kingdom",
+                                                   "USA" = "USA",
+                                                   "France" = "France",
+                                                   "London, England" = "United Kingdom",
+                                                   "Chicago, IL" = "USA",
+                                                   "Florida, USA" = "USA",
+                                                   "Chicago" = "USA",
+                                                   "India" = "India",
+                                                   "Houston, TX" = "USA",
+                                                   "California, USA" = "USA",
+                                                   "New York, USA" = "USA",
+                                                   "New Jersey, USA" = "USA",
+                                                   "Atlanta, GA" = "USA",
+                                                   "New York, NY" = "USA",
+                                                   "Toronto, Ontario" = "Canada",
+                                                   "Texas, USA" = "USA",
+                                                   "Dallas, TX" = "USA",
+                                                   "Bethesda, MD" = "USA",
+                                                   "Bay Area, California"= "USA",
+                                                   "Brasil" = "Brazil",
+                                                   "South Africa" = "South Africa",
+                                                   "Worldwide" = "",
+                                                   "\U0001f30d Customers in 45+ countries" = "",
+                                                   "UK & USA"="",
+                                                   "Los Santos" ="",
+                                                   "Computer repair company" = "",
+                                                   "Canada \U0001f1e8\U0001f1e6"="",
+                                                   "world\U0001f5fawide"="",
+                                                   "\U0001f54c" = "",
+                                                   "world\U0001f5fawide"=""
+                                              ))
+
+
+all_tweets$country_rec[all_tweets$country_rec==""] <- NA
+```
+ - The readable Location values were mapped to the associated Countries.
+ - The mapped Locations values account for approximately 30% of the available Location data.
+
+```{r Cleaned location data, eval=FALSE, warning=FALSE, include=FALSE}
+viz_4 <-all_tweets %>% group_by(subject)%>%
+  count(country_rec, sort = TRUE) %>%
+  mutate(country_rec = reorder(country_rec,n)) %>%
+  na.omit() %>%# remove NA
+  arrange(desc(n))%>%
+  slice(1:5) %>%
+  ggplot(aes(x = n,y = country_rec, fill =subject))+
+  geom_col(width = 0.7,alpha = 0.6) +
+  geom_text(aes(label = n),hjust = -0.2, colour = "black")+
+  labs(x = "Tweet Frequency",
+       y = "Top countries",
+       title = "Top countries where users talking about 'Xbox Series X' and 'Playstation 5' are from",
+       subtitle = "Readable location data mapped to countries to enable location based analysis",
+       caption = caption) +facet_grid(subject~.,scales="free_y")+
+  theme(axis.text.y = element_text(size = 13, color = "black"),
+         axis.text.x = element_blank(),
+         axis.ticks.y = element_blank(),
+         axis.title.x = element_text(size = 12, color = "black"),
+         axis.title.y = element_blank(),
+         plot.title = element_text(size = 13, face = "bold"),
+         legend.position = "top",
+         legend.title = element_blank(),
+         panel.grid.major = element_blank(),
+         panel.grid.minor = element_blank(),
+         panel.background = element_blank(),
+        strip.text.y = element_text(size = 12, face="bold"),
+        aspect.ratio = 0.2)+
+  scale_fill_manual(values = c("#003791", "#107C10"))
+
+viz_4
+```
+
+## Product Popularity Analysis\newline
+
+### *Is the 'PlayStation 5' more tweeted about than the 'Xbox Series X' from our data?*\newline
+
+Product popularity on Twitter can be quantified by how much a Product is talked about. On Twitter we can measure this in Tweet Frequency.
+
+```{r include=FALSE, eval = TRUE}
+all_tweets$min_created <- floor_date(all_tweets$created_at,"minute")
+tweets_grp_min<-all_tweets%>% group_by(subject,min_created)%>% summarise(count=n())
+```
+
+```{r echo=FALSE, warning=FALSE, comment = NA, out.width="90%", fig.align='center'}
+viz_6<-all_tweets%>%
+  mutate(hour_created = floor_date(all_tweets$created_at,"hour"))%>%
+  group_by(subject,hour_created)%>% summarise(count=n())%>%
+  ggplot(aes(x=hour_created))+
+  geom_line(aes(y=count, colour = subject), size = 0.85)+
+  theme_minimal()+
+  theme(plot.title = element_text(face = "bold"),# boldface title
+        legend.title = element_blank(),
+        aspect.ratio = 0.55,
+        plot.margin = margin(t = 0,  # Top margin
+                             r = 0,  # Right margin
+                             b = 0,  # Bottom margin
+                             l = 0))+
+  labs(x = "Time",
+       y = "Number of Tweets", # no labels on the axes
+       title = "Frequency of Tweets related to 'Xbox Series X' and 'PlayStation 5'",
+       subtitle = "Tweet counts aggregated using hourly intervals\n34000 tweets related to PlayStation 5 downloaded in much less time than 16000 tweets on Xbox Series X",
+       caption = caption)+scale_colour_manual(values = c("#003791", "#107C10"))
+viz_6
+```
+
+
+```{r include=FALSE, eval= TRUE, warning=FALSE,fig.show = "hold"}
+table_2<- tweets_grp_min%>%
+  ungroup()%>%
+  select(min_created,count)%>% head(5)%>%
+  rename("Minute created" = min_created,
+         "Number of Tweets" = count)%>%
+  kbl(booktabs = T,caption="Tweet frequency per minute")%>%
+  kable_styling(latex_options = c("striped"), full_width = F, position = "center",font_size = 7)
+
+table_2
+#```{r Randomizing minutes and summary statistics, include=FALSE}
+xbox_mins <-tweets_grp_min %>% filter(subject =="xbox")
+xbox_rand_mins<- xbox_mins[sample(nrow(xbox_mins), size=3000), ]
+
+ps5_mins <-tweets_grp_min %>% filter(subject =="ps5")
+ps5_rand_mins<- ps5_mins[sample(nrow(ps5_mins), size=3000), ]
+
+tweets_grp_min2<- rbind(xbox_rand_mins,ps5_rand_mins) # combined randomized tweet data
+#Calculate the mean tweet frequency per product
+mean_tf <- tweets_grp_min2%>% group_by(subject) %>% summarise(mean=round(mean(count),3),sd =round(sd(count),3))
+
+#```{r Table of summary statistics for frequency, echo=FALSE, warning=FALSE}
+table_3<-mean_tf%>%
+  rename("Product"=subject,
+         "Mean Tweet Frequency" = mean,
+         "Standard Deviation" = sd)%>%
+  kbl(booktabs = T,caption="Average Tweet frequency per minute per product")%>%
+  kable_styling(latex_options = c("striped"), full_width = F, position = "center",font_size = 7)
+
+table_3
+```
+
+## Product Popularity Analysis\newline
+
+### *Is the 'PlayStation 5' more tweeted about than the 'Xbox Series X' from our data?*\newline
+
+```{r Removing ouliers in tweet frequency, include=FALSE}
+IQR<-tweets_grp_min2 %>% group_by(subject)%>%summarise(count=IQR(count))
+IQR_ps5 <- IQR$count[1]
+IQR_ps5_2 <- IQR_ps5 * 1.5
+IQR_xbox <- IQR$count[2]
+IQR_xbox_2 <- IQR_xbox * 1.5
+
+#Calculate the first and third quartiles
+Quant<-tweets_grp_min2 %>% group_by(subject)%>% summarise(quantile = quantile(count, probs = c(0.25,0.75)))
+first_quart_ps5 <- Quant$quantile[1]
+third_quart_ps5 <- Quant$quantile[2]
+first_quart_xbox <- Quant$quantile[3]
+third_quart_xbox <- Quant$quantile[4]
+
+#add 1.5IQR to third quartile and deduct from first quartile to arrive at upper and lower range values
+upper_val_ps5 <- third_quart_ps5+IQR_ps5_2
+lower_val_ps5 <- first_quart_ps5-IQR_ps5_2
+
+upper_val_xbox <- third_quart_xbox+IQR_xbox_2
+lower_val_xbox <- first_quart_xbox-IQR_xbox_2
+
+#remove outliers
+tweets_grp_min3<-tweets_grp_min2%>%
+  filter((subject =="ps5" & count < upper_val_ps5 & count>lower_val_ps5) | (subject=="xbox" & count<upper_val_xbox & count>lower_val_xbox) )
+
+```
+
+```{r Boxplot of tweet frequency Per minute, echo=FALSE, warning=FALSE}
+viz_9<- ggplot(tweets_grp_min3, aes(x=subject, y=count,fill=subject)) +
+  geom_boxplot(alpha = 0.6)+labs(x = "Product",y="Tweets per minute",
+                                 title ="Boxplot of Tweet frequency in Tweets per minute",
+                                 subtitle = "Tweet frequency for both products shows normal distribution. Mean and median are similar",
+                     caption = caption,
+                     y ="Tweets per minute")+
+  stat_summary(fun.y=mean, geom="point", shape=15, size=3, color="white", fill=customPurple2)+
+  stat_summary(fun = mean, geom = "text", col = "white",     # Add text to plot
+               vjust = 1.5, aes(label = paste("Mean:", round(..y.., digits = 1))))+
+  theme(legend.title = element_blank())+
+  theme_minimal()+
+  scale_fill_manual(values = c(ps5colour, Xboxcolour))
+
+viz_9
+```
+
+```{r Updated summary statistics of tweet frequency, include=FALSE}
+mean_tf2 <- tweets_grp_min3%>% group_by(subject) %>% summarise(mean=mean(count),med = median(count),sd =sd(count))
+```
+
+```{r Density plot of tweet frequency Per minute, warning=FALSE, include=FALSE}
+viz_10<- ggplot(tweets_grp_min3, aes(x=count, fill=subject)) +
+  geom_density(alpha = 0.6,bw = 1)+
+  geom_vline(data=mean_tf2, aes(xintercept=mean, color=subject),linetype="dashed")+
+  geom_text(aes(x = mean, y = Inf,label = signif(mean, 3)),
+            vjust = 2,hjust = -0.3,
+            data = mean_tf2)+scale_x_continuous(limits=c(1,20))+scale_y_continuous(limits=c(0,0.5))+
+  labs(title ="Distribution of tweet frequency in 'Tweets per minute'",
+       subtitle = "Outliers Removed",caption = "Source: Data collected from Twitter's REST API via rtweet",
+       x ="Tweets per minute")+
+  scale_fill_manual(values = c("#003791", "#107C10"))+
+  theme(aspect.ratio = 0.2)+
+  theme_minimal()
+
+viz_10
+```
+
+```{r Statistical tests for tweet freq, include=FALSE}
+Popularity_test_description <- c("Two tailed Welch's test",
+                                 "One-tailed Welch's test")
+H0 <- c("mPs5 = mXbox","mPs5 < mXbox")
+H1 <- c("mPs5 != mXbox","mPs5 > mXbox")
+pvalue <- c(format(t.test(count ~ subject, data = tweets_grp_min3, var.equal = FALSE)$p.value,scientific=TRUE),
+            format(t.test(count ~ subject, data = tweets_grp_min3, var.equal = FALSE,alternative = "greater")$p.value,scientific=TRUE))
+
+popularity_ttest_res<- data.frame(Popularity_test_description,H0,H1,pvalue)
+```
+
+
+```{r Statistical test output 1, include=FALSE, warning=FALSE}
+# table_4<- popularity_ttest_res%>%
+#   rename("Test Description"=Popularity_test_description,
+#        "H0 (Null Hyp)" = H0,"H1 (Alt. Hyp)"=H1,
+#        "p-value" =pvalue)%>%
+#   kbl(booktabs = T,caption = "Results of statistical test of mean tweet rate of two groups (Null Hypothesis rejected)")%>%
+#   kable_styling(latex_options = c("striped","scale_down"), full_width = F, position = "left", font_size = 8)%>%
+#   # footnote(general = "This analysis considers two samples of 3000 randomly selected minutes from tweets related to each product")%>%
+#   row_spec(0, background = customPurple2, color = "white")%>%
+#   column_spec(4,bold = TRUE, background = "#ebe8fc")
+# 
+# table_4
+```
+
+
+```{r Summary statistics of tweet frequency by country, include=FALSE}
+top_5_countries <- all_tweets %>%
+  count(country_rec, sort = TRUE) %>%
+  mutate(country_rec = reorder(country_rec,n)) %>%
+  na.omit() %>%# remove NAs
+  #filter(n<=10)%>%
+  head(5)%>%select(country_rec)
+
+mean_tweets_country<-all_tweets%>%
+  filter(country_rec %in% top_5_countries$country_rec )%>%
+  group_by(country_rec, subject,min_created)%>%
+  summarise(count = n())%>% # get count of tweets per minute broken down by subject and country
+  group_by(country_rec,subject)%>%
+  summarise(mean=round(mean(count),2))%>%
+  spread(subject,mean)%>%
+  mutate(diff = ps5-xbox)
+
+vline.data<-mean_tweets_country%>%gather(subject, count, 2:3)
+```
+
+```{r Comparison of tweet freq by country, warning=FALSE, include=FALSE}
+table_5<-mean_tweets_country%>%
+  kbl(booktabs = T,caption ="Comparison of product popularity in top countries Mean Tweet rate in top countries",
+      col.names = c("Country","Ps5 (Av.tweets per min)","Xbox (Av.tweets per min)", "diff (Ps5-Xbox)"))%>%
+  kable_styling(latex_options = c("striped","scale_down"), full_width = F, position = "left", font_size = 7)%>%
+  footnote(general = "values in tweets per minutes")%>%
+  row_spec(0, background = customPurple2, color = "white")%>%
+  column_spec(2,bold = TRUE, background= customBlue0)%>%
+  column_spec(3,bold = TRUE, background= customGreen)%>%
+  column_spec(4,bold = TRUE)
+table_5
+```
+
+## Product Popularity Analysis\newline
+
+### *How popular is the 'Playstation 5' vs  'Xbox Series X' in major Markets?*\newline
+
+```{r Mean tweet frequency and distribution by country, echo=FALSE, warning=FALSE}
+viz_11<- all_tweets%>%
+  group_by(country_rec, subject,min_created)%>%summarise(count = n())%>%
+  filter(country_rec %in% top_5_countries$country_rec )%>%
+  ggplot(aes(x=count,fill= subject))+
+  geom_density(bw = 1, alpha = 0.4)+
+  labs(title ="Mean tweet frequency by country and product",
+                      x ="Tweets per minute",
+       caption = caption)+theme_minimal()+
+  facet_grid(country_rec~subject)+
+  scale_fill_manual(values = c("#003791", "#107C10"))+
+  theme(legend.position = "bottom",
+        legend.title = element_blank(),
+        axis.text = element_text(size = 12),
+        strip.text = element_text(size = 12),
+        plot.title = element_text(size = 14, hjust = 0.5))+
+  geom_vline(aes(xintercept = count),vline.data)+
+  geom_text(data = vline.data, mapping = aes(label = count, y = 0), vjust = -3, hjust = -2)
+viz_11
+```
+
+## Word Analysis and Text Mining
+
+```{r Preparing data for word analysis, include=FALSE}
+twt_xbox_clean <- all_tweets%>%filter(subject =="xbox")
+twt_ps5_clean <- all_tweets%>%filter(subject =="ps5")
+
+#Extract random sample from each set of tweets
+twt_xbox_rand<- twt_xbox_clean[sample(nrow(twt_xbox_clean), size=10000), ]
+twt_ps5_rand<- twt_ps5_clean[sample(nrow(twt_ps5_clean), size=10000), ]
+all_tweets_rand <- rbind(twt_xbox_rand,twt_ps5_rand)
+
+```
+
+```{r Preparing data for word analysis - unnest, include=FALSE}
+# First, remove http elements manually
+all_tweets_rand$stripped_text <- gsub("http.*","",  all_tweets_rand$text)
+all_tweets_rand$stripped_text <- gsub("https.*","", all_tweets_rand$stripped_text)
+all_tweets_rand$stripped_text <- gsub("amp","", all_tweets_rand$stripped_text)
+
+# Using the unnest_tokens() function in the tidytext package to 
+# clean up our text.
+all_tweets_clean <- all_tweets_rand %>%
+  select(subject,stripped_text) %>%
+  mutate(tweetnumber = row_number()) %>% # create new variable denoting the tweet number
+  unnest_tokens(word, stripped_text)
+
+# load list of stop words - from the tidytext package
+data("stop_words")
+
+#remove stop words
+cleaned_tweet_words <- all_tweets_clean %>%
+  anti_join(stop_words)
+
+#remove personalized stop words
+my_stop_words <- data.frame(word = c("ps5", "5", "xbox","playstation", "playstation5","series","x","xboxseriesx","0","1","2","3","4","5","6","7","8","9"))
+
+cleaned_tweet_words2 <- cleaned_tweet_words %>%
+  anti_join(my_stop_words)
+```
+
+```{r Preparing data for wordcloud, include=FALSE}
+cleaned_tweet_words3<-cleaned_tweet_words2 %>% group_by(subject,word) %>%
+  summarise(count=n()) %>%
+  arrange(desc(count))%>%
+  mutate(freq = count / sum(count))
+```
+
+```{r Wordcloud xbox, echo=FALSE, warning=FALSE,fig.show="hold", results = 'hide', out.width="70%",comment = NA,fig.height= 6, fig.align='center'}
+#wordcloud xbox related tweets
+viz_16<- with(cleaned_tweet_words3%>%filter(subject =="xbox"),
+     wordcloud(word, freq,
+               min.freq = 1,
+               max.words = 50,
+               random.order = FALSE,
+               colors = brewer.pal(10, "Greens"),
+               scale = c(4.5, 0.3)))
+title(main = "Wordcloud for Xbox related Tweets",
+      cex.main = 1.2, offset = 0.5)
+viz_16
+
+#wordcloud Ps5 related tweets
+viz_17<-with(cleaned_tweet_words3%>%filter(subject =="ps5"),
+     wordcloud(word, freq,
+               min.freq = 1,
+               max.words = 80,
+               random.order = FALSE,
+               colors = brewer.pal(10, "Blues"),
+               scale = c(4.5, 0.1)))
+title(main = "Wordcloud for Ps5 related Tweets",
+      cex.main = 1.2, offset = 0.5)
+viz_17
+```
+
+
+```{r Preparing data for sentiment analysis, include=FALSE}
+sentiments
+all_tweet_sentiment <- cleaned_tweet_words2 %>%
+  inner_join(get_sentiments("bing")) %>% group_by(subject, tweetnumber, sentiment)%>%
+  summarise(count=n()) %>%
+  spread(sentiment, count, fill = 0) %>% # negative and positive sentiment in separate columns
+  mutate(score = positive - negative) # score = net sentiment (positive - negative)
+head(all_tweet_sentiment)
+```
+
+```{r Tag words with sentiment, include=FALSE, warning=FALSE,message = FALSE,comment= NA,error=FALSE}
+# table_6 <- cleaned_tweet_words2 %>%
+#   inner_join(get_sentiments("bing"))%>%
+#   head(5)%>%select(tweetnumber,word,sentiment)%>%
+#   rename(
+#          #"Related Product"= subject,
+#          "Tweet Number" = tweetnumber,
+#          "Word" = word,
+#          "Sentiment" = sentiment)%>%
+#   kbl(booktabs = T,caption ="Sentiments retreived from Bing lexicon and attached to words")%>%
+#   kable_styling(latex_options = c("striped"), full_width = F, position = "left", font_size = 7)%>%
+#   # footnote(general = "This table considers randomly sampled tweets")%>%
+#   row_spec(0, background = customPurple2, color = "white")
+# table_6
+```
+
+```{r Calculate sentiment scores, include=FALSE, warning=FALSE, message = FALSE, comment= NA,error=FALSE}
+# table_7<- all_tweet_sentiment%>% head(5)%>%
+#   ungroup()%>%
+#   select(tweetnumber,negative,positive,score)%>%
+#   rename(
+#         #"Related Product"= subject,
+#          "Tweet Number" = tweetnumber)%>%
+#   kbl(booktabs = T,caption ="Sentiment scores calculated per tweet")%>%
+#   kable_styling(latex_options = c("striped"), full_width = F, position = "left", font_size = 7)%>%
+#   # footnote(general = "This table considers randomly sampled tweets")%>%
+#   row_spec(0, background = customPurple2, color = "white")
+# table_7
+```
+
+## Sentiment Analysis\newline
+
+### *Is the Twitter User Sentiment better toward the 'PlayStation 5' than the 'Xbox Series X' from our data set?*\newline
+
+```{r Sentiment means, include=FALSE}
+sentiment_means<- all_tweet_sentiment %>% group_by(subject)%>%
+  summarise(mean_score = mean(score))
+```
+
+```{r Density plot of sentiment scores, echo=FALSE, error=FALSE, warning=FALSE, comment=NA}
+viz_18<-ggplot(all_tweet_sentiment,
+       aes(x = score, # Sentiment score on x-axis
+           fill = subject)) + # Fill bars with a colour according to the topic
+  geom_histogram(aes(y=..density..), alpha=0.2, binwidth=0.9, position = "identity")+
+    geom_density(alpha=0.2, bw = 0.9)+
+  geom_vline(aes(xintercept = mean_score),
+             data = sentiment_means) +
+  # Add a vertical line at the mean scores, calculated and stored in sentiment_mean_both above
+  geom_text(aes(x = mean_score,
+                y = Inf,
+                label = signif(mean_score, 3)),
+            vjust = 2,
+            data = sentiment_means) +
+  # Add the mean as a number; vjust moves it down from the top of the plot
+  scale_x_continuous(breaks = -15:15,
+                     minor_breaks = NULL) + # Show integers; set this to a suitably large range
+  scale_fill_manual(values = c("ps5" = "#003791",
+                               "xbox" = "#107C10")) + # Specify your own colours
+  labs(x = "Sentiment Score" ,
+       #y = "Number of tweets",
+       title = "Distribution of sentiment scores of tweets by product",
+       caption = caption,
+       fill = "Product") +
+  facet_grid(subject ~ .) + # One row for each page
+  theme(legend.position = "bottom")+theme_minimal() # Legend on the bottom
+
+viz_18
+```
+
+
+```{r Boxplot of sentiment scores, error=FALSE, warning=FALSE, comment=NA, include=FALSE}
+viz_19<-ggplot(all_tweet_sentiment,
+       aes(x = subject,y=score, # Sentiment score on y-axis
+           fill = subject ))+
+  geom_boxplot(alpha =0.6)+
+  stat_summary(fun.y=mean, geom="point", shape=15, size=3, color="white", fill=customPurple2)+
+  stat_summary(fun = mean, geom = "text", col = "white",     # Add text to plot
+               vjust = 1.5, aes(label = paste("Mean:", round(..y.., digits = 1))))+
+  scale_fill_manual(values = c("ps5" = ps5colour,"xbox" = Xboxcolour)) + # Specify your own colours
+  labs(y = "Sentiment Score" ,
+       x = "Product",
+       title = "Boxplot of sentiment scores of tweets by product",
+       subtitle = "Tweet sentiments for both products shows normal distribution with minimal skew. Mean and median are similar",
+       caption = caption,
+       fill = "Product") +
+  theme(legend.position = "bottom")+theme_minimal() # Legend on the bottom
+viz_19
+```
+
+## Sentiment Analysis\newline
+
+### *Is the Twitter User Sentiment better toward the 'PlayStation 5' than the 'Xbox Series X' for the wider population of twitter users?*\newline
+
+- 10,000 Randomly sampled Tweets for each Product
+- Unequal Variances of Sentiment Scores for Tweets of both Products
+- Normally distributed Sentiment Score Values for Tweets on both Products
+
+**The Welch Test will help answer our question**
+
+```{r Sentiment mean Statistical test setup, include=FALSE}
+test_description <- c("Two-tailed Welch's test",
+                      "One-tailed Welch's test")
+H0 <- c("mPs5 = mXbox","mPs5 < mXbox")
+H1 <- c("mPs5 != mXbox","mPs5 > mXbox")
+
+pvalue <- c(format(t.test(score ~ subject, data = all_tweet_sentiment, var.equal = FALSE)$p.value,scientific=TRUE),
+            format(t.test(score ~ subject, data = all_tweet_sentiment, var.equal = FALSE,alternative = "greater")$p.value,scientific=TRUE))
+
+sentiment_ttest_res<- data.frame(test_description,H0,H1,pvalue)
+```
+
+```{r Results of statistical tests of sentiment means, echo=FALSE, error=FALSE, warning=FALSE, comment=NA}
+table_8<- sentiment_ttest_res%>%
+  rename("Test Description"=test_description,
+         "H0 (Null Hyp)" = H0,"H1 (Alt. Hyp)"=H1,
+         "p-value" =pvalue)%>%
+kbl(booktabs = T,caption = "Results of statistical test of the sentiment means of both products (Null Hypothesis rejected)")%>%
+  kable_styling(latex_options = c("striped","scale_down"), full_width = F, position = "left", font_size = 7)%>%
+  # footnote(general = "This sentiment analysis considers 10,000 randomly sampled tweets per product")%>%
+  row_spec(0, background = customPurple2, color = "white")%>%
+  column_spec(4,bold = TRUE, background = "#ebe8fc")
+
+table_8
+```
+
+## User engagement and Influencer Analysis\newline
+
+### *Are Twitter Users engaging more with with 'Xbox Series X' or 'Playstation 5 Tweets'?*
+
+```{r User Engagement, echo=FALSE, error=FALSE, warning=FALSE, comment=NA}
+ viz_25<- all_tweets_rand%>%select(subject,retweet_count,favorite_count)%>%
+  group_by(subject)%>%summarise(retweets=sum(retweet_count),favorites =sum(favorite_count))%>%
+  gather(engagement_type,value,2:3)%>%
+  mutate(subject = recode(subject,"xbox" ="Xbox Series X","ps5"="Playstation 5"))%>%
+  ggplot(aes(x=value, y = subject,fill = engagement_type))+
+  geom_col(position ='stack', width = 0.4)+
+  geom_text(aes(label = value, hjust =1.2, size = 10),show.legend = F,colour ="white")+
+  labs(x="Engagement",
+       y="Product",
+       title="User engagement measured for tweets related to the products",
+       subtitle="Enagagement measured for 10,000 randomly sampled tweets related to each product.\nOther engagement metrics (tweet replies and quotes) not available in standard Twitter API",
+       caption = caption)+
+  scale_x_continuous(labels = label_comma(), breaks = seq(0, 150000, 30000))+
+  theme(legend.title = element_blank(),
+        axis.text.x = element_text(),
+        axis.text.y = element_text(size = 11, face ="bold"),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        plot.title = element_text(size = 14, face ="bold"),
+        plot.subtitle = element_text(size = 10.5),
+        panel.background = element_rect(fill = "white"),
+        panel.grid.major.x = element_line(colour = "#dcdcdc"),
+        aspect.ratio = 0.5,
+        plot.margin = unit(c(2,1,2,1),"cm"))+
+  scale_fill_manual(values=c(customPurple2,customPink))
+viz_25
+```
+
+## User engagement and Influencer Analysis\newline
+
+### *Who is driving the engagements with these products on Twitter?*
+
+- We developed an algorithm to rank the top twitter accounts *(Influencers)* driving user engagement around these products which could be of marketing interest. 
+
+```{r Define influencer metrics function, include=FALSE}
+influence_metrics <- function(data,topic,stops){
+
+  #Take in screen name of user as user
+  #Take in twitter data as dataframe
+  #Take in sub as subject of sentiment
+  #col - column name in data
+  #list of words to be removed from unnested tweet text
+  #calculate sentiment score of user's tweets
+
+  #sentiment calculation
+  data$stripped_text <- gsub("http.*","",  data$text)
+  data$stripped_text <- gsub("https.*","", data$stripped_text)
+  data$stripped_text <- gsub("amp","", data$stripped_text)
+
+  data_clean <- data %>%
+    select(subject,screen_name,status_id, stripped_text) %>%
+    mutate(tweetnumber = row_number()) %>% # create new variable denoting the tweet number
+    unnest_tokens(word, stripped_text)
+
+  data("stop_words")
+
+  # the lexicon is the source of the stop word.
+
+  # remove stop words from the list of words
+  data_clean_words <- data_clean %>%
+    anti_join(stop_words) # return all rows from climate_tweets_clean where there are not matching values in stop_words
+
+  my_stop_words <- data.frame(word = stops)
+
+  data_clean_words2 <- data_clean_words %>%
+    anti_join(my_stop_words)
+
+  data_sentiment <- data_clean_words2 %>%
+    inner_join(get_sentiments("bing")) %>% group_by(subject,screen_name,status_id, tweetnumber, sentiment)%>%
+    summarise(count=n()) %>%
+    spread(sentiment, count, fill = 0) %>% # negative and positive sentiment in separate columns
+    mutate(score = positive - negative) # score = net sentiment (positive - negative)
+
+  data_join<-data.frame(status_id = data_sentiment$status_id,sentiment_score = data_sentiment$score)
+
+  data_final<-merge(data, data_join, by = "status_id")
+
+  influencer_rank <- data_final%>%filter(subject == topic)%>%
+    group_by(screen_name)%>%
+    summarise(followers = max(followers_count),
+              tweets = n(),
+              mean_retweet_per_tweet = mean(retweet_count),
+              mean_fav_per_tweet = mean(favorite_count),
+              #ave_retweet_reach = sum(retweet_followers_count),
+              #ave_quote_reach = sum(quoted_followers_count),
+              sentiment_mean = mean(sentiment_score),)%>%
+    mutate(rank_fol = rank(followers),
+           rank_tweet = rank(tweets),
+           rank_mean_ret=rank(mean_retweet_per_tweet),
+           rank_mean_fav=rank(mean_fav_per_tweet),
+           rank_sent=rank(sentiment_mean),
+           rank =(rank_fol+(rank_tweet*0.5)+rank_mean_ret+rank_mean_fav)/4)%>%
+    select(screen_name,followers,tweets,mean_retweet_per_tweet,mean_fav_per_tweet,sentiment_mean,rank)%>%
+    filter(sentiment_mean>0)%>%
+    arrange(desc(rank))
+
+  influencer_rank
+  influencer_rank_order <-influencer_rank[,c(1,7,2,3,4,5,6)]
+  influencer_rank_order
+}
+```
+
+```{r Applying influencer metrics function, include=FALSE}
+stops_xbox<-c("xbox","series","x","xboxseriesx","0","1","2","3","4","5","6","7","8","9")
+stops_ps5<-c("ps5","playstation","5","playstation5","0","1","2","3","4","5","6","7","8","9")
+
+influencers_xbox<-influence_metrics(all_tweets,"xbox",stops_xbox)
+influencers_ps5<-influence_metrics(all_tweets,"ps5",stops_ps5)
+
+influencers_xbox
+influencers_ps5
+```
+
+```{r xbox Influencer rank, echo=FALSE, error=FALSE, warning=FALSE, comment=NA}
+table_9 <-influencers_xbox%>%
+  mutate(rank = round(rank),
+         mean_retweet_per_tweet=round(mean_retweet_per_tweet),
+         mean_fav_per_tweet	=round(mean_fav_per_tweet),
+         sentiment_mean	=round(sentiment_mean,2))%>%head(5)%>%
+  rename("User" = screen_name,
+         "Rank"="rank",
+         "Followers"= followers,
+         "Tweet count"=tweets,
+         "Mean Retweets per tweet"=mean_retweet_per_tweet,
+         "Mean favorite per tweet"=mean_fav_per_tweet,
+         "Mean Sentiment Score"=sentiment_mean)%>%
+  kbl(booktabs = T,caption ="Influencer Rank for tweets related to Xbox Series X")%>%
+  kable_styling(latex_options = c("striped","scale_down"), full_width = F, position = "left", font_size = 10)%>%
+  footnote(general = "This table considers 10,000 randomly sampled tweets")%>%
+  row_spec(0, background = Xboxcolour, color = "white")%>%
+  column_spec(2,bold = TRUE)
+
+table_9
+```
+
+
+```{r ps5 influencer rank, echo=FALSE, error=FALSE, warning=FALSE, comment=NA}
+table_10 <-influencers_ps5%>%
+  mutate(rank = round(rank),
+         mean_retweet_per_tweet=round(mean_retweet_per_tweet),
+         mean_fav_per_tweet	=round(mean_fav_per_tweet),
+         sentiment_mean	=round(sentiment_mean,2))%>%head(5)%>%
+  rename("User" = screen_name,
+         "Rank"="rank",
+         "Followers"= followers,
+         "Tweet count"=tweets,
+         "Mean Retweets per tweet"=mean_retweet_per_tweet,
+         "Mean favorite per tweet"=mean_fav_per_tweet,
+         "Mean Sentiment Score"=sentiment_mean)%>%
+  kbl(booktabs = T,caption ="Influencer Rank for tweets related to PlayStation 5")%>%
+  kable_styling(latex_options = c("striped","scale_down"), full_width = F, position = "left", font_size = 10)%>%
+  footnote(general = "This table considers 10,000 randomly sampled tweets")%>%
+  row_spec(0, background = ps5colour, color = "white")%>%
+  column_spec(2,bold = TRUE)
+
+table_10
+```
+
+## Limitations of the analysis
+
+### Twitter API Limitations
+- Variables such as reply_count and quote_count were not available to us to improve our analysis of consumer engagement and reach (@tweetdict).
+- Twitter location data is not reliable.
+
+### Limitations of the Statistical tests
+
+- Social media data is not representative of  the consumer population.
+- Sentiment score can be skewed by singular events/incidents e.g a likely hacking incident related to Xbox Series X in our case.
+
+### Limitations of Lexicon-based approach 
+- Studies show that the lexicon based approach not as accurate as supervised-learning approach. (@sent).
+- lexicon-based methods are restricted by their lexicons, and more particularly, by the use of static prior sentiment values of terms regardless of their contexts. (@sent).
+- In the context of twitter where non-traditional language is largely used with different colloquialisms generated each day, it’s difficult for lexicon based approaches to be manually updated to account for new words. (@sent).
+- Algorithm does not cover for context of speech, sarcasm and other nuances of speech based communication.
+
+## Key Insights & Strategic Suggestions
+
+- Considering the PlayStation 5 has more traction on twitter than the Xbox Series X, **International Retailers** could strongly consider twitter as a major marketing channel for PlayStation 5.
+
+- **International Retailers** can leverage on influencers for each product as part of their marketing strategy to improve the engagement and sentiment of users around that product.
+
+- **Video Game Developers** can focus their resources on developing more games for the PlayStation 5 versus the Xbox Series X.
+
+- **Microsoft** could look into a possible hacking related incident revealed from the Word Analysis for Xbox Series X related tweets.
+
+- Also from the Word Analysis, **SONY** could look into PlayStation 4(Ps4) related tweets. Perhaps there is a preference in terms of features in the Ps4 console.
+
+### Other Reference Notes
+- Packages: Tidytext (@tidytext); kableExtra (@kable).
+- Script Guide: R markdown guide I (@cookbook); R markdown guide II (@defguide).
+
+
+---
+## References
