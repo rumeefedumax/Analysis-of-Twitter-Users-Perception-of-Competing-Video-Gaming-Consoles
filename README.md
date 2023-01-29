@@ -17,5 +17,6 @@ their tweets and used this to structure my keyword search as follows:
 
 Xbox Series X search keywords:
 “xbox series x”,“xboxseriesx” or #xboxseriesx
+
 Playstation 5 search keywords:
 “ps5”, “playstation 5”,“playstation5”, #playstation5 or #ps5
