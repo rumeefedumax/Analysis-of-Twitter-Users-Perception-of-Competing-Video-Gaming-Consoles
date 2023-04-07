@@ -1,4 +1,4 @@
-# Analysis-of-Twitter-Users--Perception-of-Competing-Video-Gaming-Consoles
+# Sentiment-Analysis-Of-Competing-Video-Game-Consoles-Using-Twitter-Data
 Microsoft and SONY are two of the biggest players in the non hand-held console
 gaming market with their feature products ‘Xbox’ & ‘PlayStation’ being 2 of the most
 purchased gaming consoles globally in the last 2 decades.(Statista (2022)).
